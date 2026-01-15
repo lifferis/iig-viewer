@@ -1,1 +1,1217 @@
-11
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>技能图鉴（JSON + IndexedDB + ZIP 更新）</title>
+  <style>
+    :root{
+      --bg:#0b0f16;
+      --bd:#223044;
+      --bd2:#1a2638;
+      --fg:#e8eefc;
+      --muted:#93a4c7;
+      --muted2:#6f84ad;
+      --ok:#2ee59d;
+      --err:#ff6a6a;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    *{ box-sizing:border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body{
+      margin:0;
+      background: radial-gradient(1200px 600px at 20% 0%, #0f1a2b 0%, var(--bg) 55%) fixed;
+      color:var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans SC", sans-serif;
+    }
+    header{
+      position:sticky; top:0; z-index:10;
+      background: linear-gradient(180deg, rgba(11,15,22,.92) 0%, rgba(11,15,22,.75) 100%);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--bd2);
+      padding:14px 16px;
+    }
+    .topbar{
+      display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+      max-width: 1480px; margin:0 auto;
+    }
+    .btn{
+      border:1px solid var(--bd);
+      background: linear-gradient(180deg, #122039 0%, #0e1727 100%);
+      color:var(--fg);
+      padding:9px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      box-shadow: 0 8px 18px rgba(0,0,0,.25);
+      user-select:none;
+    }
+    .btn:hover{ border-color:#2b3d58; }
+    .btn.red{
+      background: linear-gradient(180deg, #2a0f14 0%, #1b0b0f 100%);
+      border-color:#4c1f2a;
+    }
+    .btn.red:hover{ border-color:#6a2a38; }
+    input[type=file]{ display:none; }
+
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:7px 10px;
+      border-radius:999px;
+      background: rgba(19,32,51,.75);
+      border:1px solid var(--bd2);
+      color:var(--muted);
+      font-size:13px;
+      white-space:nowrap;
+    }
+    .chip strong{ color:var(--fg); font-weight:800; }
+    .spacer{ flex:1; min-width: 8px; }
+
+    .search{
+      width: min(620px, 100%);
+      display:flex; align-items:center; gap:10px;
+      background: rgba(15,22,34,.9);
+      border:1px solid var(--bd);
+      border-radius: 999px;
+      padding: 8px 12px;
+    }
+    .search input{
+      width:100%;
+      border:none;
+      outline:none;
+      background:transparent;
+      color:var(--fg);
+      font-size:14px;
+    }
+    .search .hint{ color:var(--muted2); font-size:12px; }
+
+    main{
+      max-width: 1480px;
+      margin: 14px auto 28px;
+      padding: 0 16px;
+      display:grid;
+      grid-template-columns: 440px 1fr;
+      gap: 14px;
+      height: calc(100vh - 86px);
+      min-height: 0;
+    }
+    @media(max-width: 980px){
+      main{ grid-template-columns: 1fr; height: auto; }
+      html, body { overflow: auto; }
+    }
+
+    .panel{
+      background: linear-gradient(180deg, rgba(15,22,34,.92) 0%, rgba(13,20,32,.88) 100%);
+      border:1px solid var(--bd2);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height: 0;
+    }
+    .panel .hd{
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--bd2);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .panel .hd .title{ font-weight:900; letter-spacing:.2px; }
+    .panel .hd .sub{ color:var(--muted); font-size:12px; }
+    .panel .bd{ padding: 12px 14px; overflow:auto; height: 100%; }
+
+    .listWrap{
+      height: calc(100% - 52px);
+      min-height: 520px;
+      overflow:auto;
+      background: rgba(9,14,22,.25);
+      overscroll-behavior: contain;
+    }
+    @media(max-width: 980px){
+      .listWrap{ height: calc(100vh - 340px); min-height: 420px; }
+    }
+    .rowItem{
+      display:grid;
+      grid-template-columns: 96px 1fr;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(26,38,56,.65);
+      cursor:pointer;
+      contain: content;
+    }
+    .rowItem:hover{ background: rgba(89,167,255,.06); }
+    .rowItem.selected{
+      background: rgba(89,167,255,.12);
+      outline: 1px solid rgba(89,167,255,.35);
+    }
+    .id{
+      font-family: var(--mono);
+      font-size:13px;
+      color:#d8e4ff;
+      opacity:.95;
+      align-self:start;
+    }
+    .nm{ font-weight:900; }
+    .tag{
+      display:inline-block;
+      margin-top:6px;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:12px;
+      color:var(--muted);
+      border:1px solid rgba(34,48,68,.9);
+      background: rgba(19,32,51,.55);
+      width: fit-content;
+    }
+    .tag.both{ color:#cfe6ff; border-color: rgba(89,167,255,.35); background: rgba(89,167,255,.08); }
+    .tag.skill{ color:#bfffe7; border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.07); }
+    .tag.ability{ color:#ffd0d0; border-color: rgba(255,106,106,.35); background: rgba(255,106,106,.06); }
+
+    .kvs{ display:flex; gap:8px; flex-wrap:wrap; margin-top: 6px; }
+    .pill{
+      font-size:12px; color:var(--muted);
+      border:1px solid rgba(34,48,68,.9);
+      background: rgba(19,32,51,.55);
+      padding:4px 10px;
+      border-radius:999px;
+      user-select:none;
+    }
+    .pill.ok{ color:#bfffe7; border-color: rgba(46,229,157,.35); background: rgba(46,229,157,.07); }
+    .pill.bad{ color:#ffd0d0; border-color: rgba(255,106,106,.35); background: rgba(255,106,106,.06); }
+
+    .block{
+      background: rgba(9,14,22,.35);
+      border: 1px solid rgba(26,38,56,.85);
+      border-radius: 14px;
+      padding: 12px 12px;
+      margin-top: 10px;
+    }
+    .block .lbl{ font-weight:900; margin-bottom:6px; }
+    .block .txt{ color:#d7e4ff; line-height:1.55; white-space:pre-wrap; }
+
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    @media(max-width: 980px){
+      .grid2{ grid-template-columns: 1fr; }
+    }
+
+    table{
+      width:100%;
+      border-collapse:collapse;
+      font-family: var(--mono);
+      font-size:12px;
+    }
+    td{
+      padding:7px 6px;
+      border-bottom: 1px solid rgba(26,38,56,.7);
+      vertical-align:top;
+      word-break: break-word;
+    }
+    td.k{ width: 42%; color: #b8c9f0; }
+    td.v{ color: #e6efff; }
+
+    .statusLine{
+      color: var(--muted);
+      font-size: 13px;
+      white-space: pre-wrap;
+    }
+    .smallBtns{ display:flex; gap:8px; flex-wrap:wrap; }
+    .btn2{
+      border:1px solid rgba(34,48,68,.9);
+      background: rgba(19,32,51,.55);
+      color: var(--fg);
+      padding:6px 10px;
+      border-radius: 10px;
+      cursor:pointer;
+      font-size: 13px;
+      user-select:none;
+    }
+    .btn2:hover{ background: rgba(89,167,255,.07); border-color: rgba(89,167,255,.35); }
+
+    .foldHd{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .foldHd .right{ display:flex; gap:8px; align-items:center; }
+    .caret{
+      width: 10px; height: 10px; border-right:2px solid var(--muted); border-bottom:2px solid var(--muted);
+      transform: rotate(45deg);
+      transition: transform .18s ease;
+      margin-right: 4px;
+    }
+    .collapsed .caret{ transform: rotate(-45deg); }
+    .foldBody{ margin-top:10px; }
+    .collapsed .foldBody{ display:none; }
+
+    .summaryGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap:10px;
+      margin-top:10px;
+    }
+    @media(max-width: 980px){
+      .summaryGrid{ grid-template-columns: 1fr; }
+    }
+    .mini{
+      border:1px solid rgba(34,48,68,.8);
+      background: rgba(19,32,51,.35);
+      border-radius: 12px;
+      padding: 10px 10px;
+    }
+    .mini .h{ font-weight:900; margin-bottom:6px; }
+    .mini .c{ color: var(--muted); font-size: 12px; white-space: pre-wrap; }
+    .mono{ font-family: var(--mono); }
+
+    .toast{
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      background: rgba(15,22,34,.95);
+      border:1px solid rgba(34,48,68,.9);
+      color: var(--fg);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      max-width: min(560px, calc(100vw - 32px));
+      display:none;
+      white-space: pre-wrap;
+      font-size: 13px;
+      z-index: 99;
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <div class="topbar">
+    <label class="btn" for="zipInput">加载加密数据包 ZIP</label>
+    <input id="zipInput" type="file" accept=".zip" />
+    <button class="btn red" id="btnClear">清除数据</button>
+    <button class="btn" id="btnReload">从缓存重新加载</button>
+
+    <div class="chip" id="chipVer">已安装：<strong>未安装</strong></div>
+<div class="chip" id="chipPwa">离线：未知</div>
+<button class="btn" id="btnUpdate" title="检查并应用更新（若有）">检查更新</button>
+
+    <div class="chip" id="chipCount">0 entries</div>
+    <div class="chip" id="chipHint">（ID = skills ∪ abilities；同ID可两边都有/单边有）</div>
+
+    <div class="spacer"></div>
+
+    <div class="search">
+      <span class="hint">搜索：</span>
+      <input id="q" placeholder="输入 ID 或名称（模糊）" />
+      <span class="hint" id="qStat"></span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="hd">
+      <div>
+        <div class="title">列表（合集ID）</div>
+        <div class="sub" id="listSub">未加载</div>
+      </div>
+      <div class="smallBtns">
+        <button class="btn2" id="btnPrev">↑</button>
+        <button class="btn2" id="btnNext">↓</button>
+        <button class="btn2" id="btnCopyId">复制ID</button>
+      </div>
+    </div>
+    <div class="listWrap" id="listWrap">
+      <div id="list"></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="hd">
+      <div>
+        <div class="title" id="dTitle">详情</div>
+        <div class="sub" id="dSub">请先导入 ZIP 或从缓存加载</div>
+      </div>
+      <div class="smallBtns">
+        <button class="btn2" id="btnCopySkill">复制 skill JSON</button>
+        <button class="btn2" id="btnCopyAbility">复制 ability JSON</button>
+      </div>
+    </div>
+
+    <div class="bd">
+      <div class="statusLine" id="status">启动中…</div>
+
+      <div class="block collapsed" id="updateCard" style="display:none;">
+        <div class="foldHd" id="updateToggle">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="caret"></div>
+            <div class="lbl" style="margin:0;">更新摘要</div>
+            <span class="pill" id="sumPill"></span>
+          </div>
+          <div class="right">
+            <span class="pill mono" id="sumVer"></span>
+          </div>
+        </div>
+        <div class="foldBody">
+          <div class="muted2" style="color:var(--muted); font-size:12px;">
+            仅统计“新增 ID”。（如需删除/变更，也可以继续加）
+          </div>
+          <div class="summaryGrid" style="margin-top:10px;">
+            <div class="mini">
+              <div class="h">新增：only-skill</div>
+              <div class="c mono" id="sumOnlySkill">-</div>
+            </div>
+            <div class="mini">
+              <div class="h">新增：only-ability</div>
+              <div class="c mono" id="sumOnlyAbility">-</div>
+            </div>
+            <div class="mini">
+              <div class="h">新增：both</div>
+              <div class="c mono" id="sumBoth">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kvs" id="pills" style="display:none;"></div>
+
+      <div class="block" id="bSkillDesc" style="display:none;">
+        <div class="lbl">skill.description</div>
+        <div class="txt" id="skillDesc"></div>
+      </div>
+
+      <div class="block" id="bAbDesc" style="display:none;">
+        <div class="lbl">ability.description</div>
+        <div class="txt" id="abDesc"></div>
+      </div>
+
+      <div class="grid2" id="tables" style="display:none;">
+        <div class="block">
+          <div class="lbl">skill 表数据</div>
+          <table id="tSkill"></table>
+        </div>
+        <div class="block">
+          <div class="lbl">ability 表数据</div>
+          <table id="tAb"></table>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PBKDF2_ITER = 200000;
+
+// 基底密码（做了拆分，避免直观出现明文；但本质上仍可被逆向）
+function baseKeyPart(){
+  const a = [73,114,105,115,77,121,115,116,101,114,105,97,33];
+  return String.fromCharCode(...a);
+}
+
+function parseVersionFromZipName(name){
+  // 支持：data_v1.0.0.zip / anything_v1.2.3.zip / v1.2.3.zip
+  const m = String(name||"").match(/(?:^|[_-])v(\d+\.\d+\.\d+)(?:\.|$)/i);
+  return m ? m[1] : null;
+}
+
+function buildPassword(version){
+  return baseKeyPart() + String(version||"");
+}
+
+const PBKDF2_ITER = 200000;
+const DB_NAME = "DexDB";
+const DB_VER = 1;
+
+const MiniZip = (() => {
+  const crcTable = (() => {
+    const t = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[i] = c >>> 0;
+    }
+    return t;
+  })();
+
+  function crc32(u8) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < u8.length; i++) c = crcTable[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+
+  async function inflateRaw(data) {
+    if (typeof DecompressionStream === "undefined") {
+      throw new Error("当前浏览器不支持 DecompressionStream，无法解压 ZIP。请用 Chrome/Edge，或我给你换成“内置完整 JSZip 的单文件版”。");
+    }
+    const ds = new DecompressionStream("deflate-raw");
+    const stream = new Blob([data]).stream().pipeThrough(ds);
+    const ab = await new Response(stream).arrayBuffer();
+    return new Uint8Array(ab);
+  }
+
+  const readU16 = (dv, off) => dv.getUint16(off, true);
+  const readU32 = (dv, off) => dv.getUint32(off, true);
+
+  function findEOCD(bytes) {
+    for (let i = bytes.length - 22; i >= 0 && i >= bytes.length - 0xFFFF - 22; i--) {
+      if (bytes[i] === 0x50 && bytes[i+1] === 0x4b && bytes[i+2] === 0x05 && bytes[i+3] === 0x06) return i;
+    }
+    return -1;
+  }
+
+  async function load(arrayBuffer) {
+    const bytes = new Uint8Array(arrayBuffer);
+    const dv = new DataView(arrayBuffer);
+
+    const eocd = findEOCD(bytes);
+    if (eocd < 0) throw new Error("ZIP 结构错误：找不到 EOCD");
+
+    const cdSize = readU32(dv, eocd + 12);
+    const cdOffset = readU32(dv, eocd + 16);
+
+    let ptr = cdOffset;
+    const files = new Map();
+
+    while (ptr < cdOffset + cdSize) {
+      if (bytes[ptr] !== 0x50 || bytes[ptr+1] !== 0x4b || bytes[ptr+2] !== 0x01 || bytes[ptr+3] !== 0x02) {
+        throw new Error("ZIP 结构错误：中央目录签名不匹配");
+      }
+
+      const compMethod = readU16(dv, ptr + 10);
+      const crc = readU32(dv, ptr + 16);
+      const compSize = readU32(dv, ptr + 20);
+      const nameLen = readU16(dv, ptr + 28);
+      const extraLen = readU16(dv, ptr + 30);
+      const commentLen = readU16(dv, ptr + 32);
+      const lfhOffset = readU32(dv, ptr + 42);
+
+      const nameBytes = bytes.slice(ptr + 46, ptr + 46 + nameLen);
+      const name = new TextDecoder("utf-8").decode(nameBytes);
+
+      files.set(name, { name, compMethod, crc, compSize, lfhOffset });
+      ptr = ptr + 46 + nameLen + extraLen + commentLen;
+    }
+
+    async function readFile(name) {
+      const meta = files.get(name);
+      if (!meta) return null;
+
+      const off = meta.lfhOffset;
+      if (bytes[off] !== 0x50 || bytes[off+1] !== 0x4b || bytes[off+2] !== 0x03 || bytes[off+3] !== 0x04) {
+        throw new Error("ZIP 结构错误：LFH 签名不匹配：" + name);
+      }
+      const nameLen = readU16(dv, off + 26);
+      const extraLen = readU16(dv, off + 28);
+      const dataStart = off + 30 + nameLen + extraLen;
+
+      const compData = bytes.slice(dataStart, dataStart + meta.compSize);
+
+      let out;
+      if (meta.compMethod === 0) out = compData;
+      else if (meta.compMethod === 8) out = await inflateRaw(compData);
+      else throw new Error("不支持的 ZIP 压缩方式：" + meta.compMethod + "（文件：" + name + "）");
+
+      const c = crc32(out);
+      if (c !== meta.crc) throw new Error("CRC 校验失败：" + name);
+      return out;
+    }
+
+    return { files, readFile };
+  }
+
+  return { load };
+})();
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onerror = () => reject(req.error);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");
+      if (!db.objectStoreNames.contains("files")) db.createObjectStore("files");
+    };
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+async function dbGet(store, key) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, "readonly").objectStore(store).get(key);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+async function dbSet(store, key, value) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, "readwrite").objectStore(store).put(value, key);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve();
+  });
+}
+async function dbGetAllKeys(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(store, "readonly").objectStore(store).getAllKeys();
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve(req.result || []);
+  });
+}
+async function dbDeleteDatabase() {
+  const db = await openDB(); db.close();
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => resolve();
+    req.onblocked = () => reject(new Error("删除数据库被阻塞：请关闭其他打开此页面的标签页"));
+  });
+}
+
+async function getFileJsonText(filename) {
+  const rec = await dbGet("files", filename);
+  return rec?.jsonText ?? null;
+}
+async function getFileJsonTextSmart(preferExact, keywords) {
+  if (preferExact) {
+    const t = await getFileJsonText(preferExact);
+    if (t) return { name: preferExact, text: t };
+  }
+  const keys = (await dbGetAllKeys("files")).map(k => String(k));
+  const lower = keys.map(k => k.toLowerCase());
+  const kw = (keywords || []).map(s => s.toLowerCase());
+
+  let idx = lower.findIndex(k => kw.every(w => k.includes(w)));
+  if (idx >= 0) {
+    const name = keys[idx];
+    const text = await getFileJsonText(name);
+    if (text) return { name, text, keys };
+  }
+  idx = lower.findIndex(k => kw.some(w => k.includes(w)));
+  if (idx >= 0) {
+    const name = keys[idx];
+    const text = await getFileJsonText(name);
+    if (text) return { name, text, keys };
+  }
+  return { name: null, text: null, keys };
+}
+
+function ascii(u8a) { return String.fromCharCode(...u8a); }
+
+async function deriveAesKey(password, salt) {
+  const enc = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations: PBKDF2_ITER, hash: "SHA-256" },
+    baseKey,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["decrypt"]
+  );
+}
+
+async function decryptDexEnc(arrayBuffer, password) {
+  const data = new Uint8Array(arrayBuffer);
+  const magic = ascii(data.slice(0, 4));
+  if (magic !== "DEX1") throw new Error("不是 DEX1 格式文件");
+  const ver = data[4];
+  if (ver !== 1) throw new Error("不支持的 DEX 版本：" + ver);
+
+  const salt = data.slice(5, 21);
+  const iv = data.slice(21, 33);
+  const cipherPlusTag = data.slice(33);
+
+  const key = await deriveAesKey(password, salt);
+  const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, cipherPlusTag);
+
+  let text = new TextDecoder("utf-8", { fatal: false }).decode(plainBuf);
+  text = text.replace(/^\uFEFF/, "").replace(/^\u0000+/, "");
+  return text;
+}
+
+async function getInstalledVersion() {
+  return await dbGet("meta", "currentVersion") || null;
+}
+
+async function installFromZip(zipArrayBuffer, zipFileName) {
+  const zip = await MiniZip.load(zipArrayBuffer);
+
+  const manifestU8 = await zip.readFile("manifest.json");
+  if (!manifestU8) throw new Error("ZIP 缺少 manifest.json");
+  const manifestText = new TextDecoder("utf-8").decode(manifestU8);
+  const manifest = JSON.parse(manifestText);
+
+  if (!manifest.version || !Array.isArray(manifest.encryptedFiles)) {
+    throw new Error("manifest.json 格式不正确");
+  }
+
+  // 版本号用于“半随机密码”：密码 = 基底 + 版本号
+  const verFromName = parseVersionFromZipName(zipFileName);
+  const versionUsed = verFromName || manifest.version;
+  if (!versionUsed) throw new Error("无法确定版本号：文件名和 manifest 都没有 version");
+
+  const password = buildPassword(versionUsed);
+
+  for (const relPath of manifest.encryptedFiles) {
+    const encU8 = await zip.readFile(relPath);
+    if (!encU8) throw new Error("ZIP 缺少文件：" + relPath);
+
+    const jsonText = await decryptDexEnc(encU8.buffer, password);
+
+    const outName = relPath.split("/").pop().replace(/\.enc$/i, "");
+    await dbSet("files", outName, { version: manifest.version, jsonText });
+  }
+
+  await dbSet("meta", "currentVersion", versionUsed);
+  await dbSet("meta", "installedAt", new Date().toISOString());
+
+  return versionUsed;
+}
+
+function asArray(maybe) {
+  if (!maybe) return [];
+  if (Array.isArray(maybe)) return maybe;
+  if (Array.isArray(maybe.data)) return maybe.data;
+  return [];
+}
+
+function getId(obj) {
+  const id = Number(obj?.id ?? obj?.ID);
+  return Number.isFinite(id) ? id : null;
+}
+function getNameSkill(s) {
+  return String(s?.name ?? s?.Name ?? s?.skillname ?? "").trim();
+}
+function getNameAbility(a) {
+  return String(a?.name ?? a?.Name ?? a?.abilityname ?? "").trim();
+}
+
+async function snapshotOldAllIds() {
+  const sRes = await getFileJsonTextSmart("mDressSkills.json", ["dress", "skill"]);
+  const aRes = await getFileJsonTextSmart("mDressAbilities.json", ["dress", "abil"]);
+
+  const oldSkills = sRes.text ? asArray(JSON.parse(sRes.text)) : [];
+  const oldAbs = aRes.text ? asArray(JSON.parse(aRes.text)) : [];
+
+  const set = new Set();
+  for (const s of oldSkills) { const id = getId(s); if (id!=null) set.add(id); }
+  for (const a of oldAbs) { const id = getId(a); if (id!=null) set.add(id); }
+  return set;
+}
+
+const $ = (s) => document.querySelector(s);
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function toast(msg) {
+  const el = $("#toast");
+  el.textContent = msg;
+  el.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => el.style.display = "none", 1600);
+}
+function setStatus(msg, kind="") {
+  const el = $("#status");
+  el.textContent = msg;
+  el.style.color = kind === "ok" ? "var(--ok)" : kind === "err" ? "var(--err)" : "var(--muted)";
+}
+function safeParse(text, name) {
+  try { return JSON.parse(text); }
+  catch (e) { throw new Error(`${name} JSON.parse 失败：${e.message}`); }
+}
+function renderTable(el, obj) {
+  const rows = obj ? Object.keys(obj).sort((a,b)=>a.localeCompare(b)).map(k => [k, obj[k]]) : [];
+  el.innerHTML = rows.map(([k,v]) => {
+    let vv = v;
+    if (typeof vv === "object" && vv !== null) vv = JSON.stringify(vv);
+    return `<tr><td class="k">${escapeHtml(k)}</td><td class="v">${escapeHtml(String(vv))}</td></tr>`;
+  }).join("");
+}
+
+const State = {
+  version: null,
+  skillsRaw: null,
+  abilitiesRaw: null,
+  skills: [],
+  abilities: [],
+  entryById: new Map(),
+  entries: [],
+  filtered: [],
+  selectedId: null,
+  selectedEntry: null,
+  lastUpdate: null,
+  renderToken: 0,
+};
+
+function entryTag(e){
+  if (e.hasSkill && e.hasAbility) return "both";
+  if (e.hasSkill) return "skill";
+  return "ability";
+}
+
+function buildUnifiedEntries() {
+  State.entryById = new Map();
+
+  for (const s of State.skills) {
+    const id = getId(s);
+    if (id == null) continue;
+    const name = getNameSkill(s) || "";
+    State.entryById.set(id, { id, name, hasSkill:true, hasAbility:false, skill:s, ability:null });
+  }
+
+  for (const a of State.abilities) {
+    const id = getId(a);
+    if (id == null) continue;
+    const exist = State.entryById.get(id);
+    const an = getNameAbility(a) || "";
+    if (exist) {
+      exist.hasAbility = true;
+      exist.ability = a;
+      if (!exist.name && an) exist.name = an;
+    } else {
+      State.entryById.set(id, { id, name: an || "", hasSkill:false, hasAbility:true, skill:null, ability:a });
+    }
+  }
+
+  State.entries = Array.from(State.entryById.values()).sort((x,y)=>x.id-y.id);
+  State.filtered = State.entries;
+}
+
+function applySearch(q) {
+  q = (q || "").trim();
+  if (!q) {
+    State.filtered = State.entries;
+    return;
+  }
+  const isId = /^\d+$/.test(q);
+  const qq = q.toLowerCase();
+
+  State.filtered = State.entries.filter(e => {
+    if (isId) return String(e.id).includes(q);
+    return (e.name || "").toLowerCase().includes(qq);
+  });
+}
+
+function renderDetail() {
+  const e = State.selectedEntry;
+  if (!e) {
+    $("#dTitle").textContent = "详情";
+    $("#dSub").textContent = "请选择一个条目";
+    $("#pills").style.display = "none";
+    $("#bSkillDesc").style.display = "none";
+    $("#bAbDesc").style.display = "none";
+    $("#tables").style.display = "none";
+    return;
+  }
+
+  $("#dTitle").textContent = e.name || "(no name)";
+  $("#dSub").textContent = `ID: ${e.id}`;
+
+  const pills = [];
+  pills.push(`<span class="pill">ID: ${e.id}</span>`);
+  pills.push(e.hasSkill ? `<span class="pill ok">has skill</span>` : `<span class="pill bad">no skill</span>`);
+  pills.push(e.hasAbility ? `<span class="pill ok">has ability</span>` : `<span class="pill bad">no ability</span>`);
+  $("#pills").innerHTML = pills.join("");
+  $("#pills").style.display = "flex";
+
+  const s = e.skill;
+  const a = e.ability;
+
+  $("#skillDesc").textContent = s ? String(s.description ?? s.desc ?? "(empty)") : "（该 ID 在 skill 表不存在）";
+  $("#abDesc").textContent = a ? String(a.description ?? a.desc ?? "(empty)") : "（该 ID 在 ability 表不存在）";
+  $("#bSkillDesc").style.display = "block";
+  $("#bAbDesc").style.display = "block";
+
+  renderTable($("#tSkill"), s || { note: "no skill for this id" });
+  renderTable($("#tAb"), a || { note: "no ability for this id" });
+  $("#tables").style.display = "grid";
+}
+
+function setListStats() {
+  const total = State.filtered.length;
+  $("#chipCount").textContent = `${total} entries`;
+  $("#listSub").textContent = total ? `共 ${total} 条（分批渲染）` : "无结果";
+  $("#qStat").textContent = total ? `共 ${total}` : "";
+}
+
+function buildRowHTML(item) {
+  const selected = item.id === State.selectedId ? "selected" : "";
+  const tag = entryTag(item);
+  const name = item.name || "(no name)";
+  return `
+    <div class="rowItem ${selected}" data-id="${item.id}">
+      <div class="id">${item.id}</div>
+      <div>
+        <div class="nm">${escapeHtml(name)}</div>
+        <div class="tag ${tag}">${tag}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderListBatched({ keepScroll = true } = {}) {
+  const wrap = $("#listWrap");
+  const listEl = $("#list");
+  const prevScroll = wrap.scrollTop;
+
+  const token = ++State.renderToken;
+  setListStats();
+  listEl.innerHTML = "";
+
+  if (!State.filtered.length) return;
+
+  const BATCH = 300;
+  let i = 0;
+
+  function pump() {
+    if (token !== State.renderToken) return;
+    const frag = document.createDocumentFragment();
+    const end = Math.min(State.filtered.length, i + BATCH);
+
+    for (; i < end; i++) {
+      const item = State.filtered[i];
+      const tmp = document.createElement("div");
+      tmp.innerHTML = buildRowHTML(item).trim();
+      frag.appendChild(tmp.firstElementChild);
+    }
+    listEl.appendChild(frag);
+
+    if (i < State.filtered.length) requestAnimationFrame(pump);
+    else {
+      if (keepScroll) wrap.scrollTop = prevScroll;
+      syncSelectedRowHighlight();
+    }
+  }
+  requestAnimationFrame(pump);
+}
+
+function syncSelectedRowHighlight() {
+  const listEl = $("#list");
+  listEl.querySelectorAll(".rowItem.selected").forEach(el => el.classList.remove("selected"));
+  if (!Number.isFinite(State.selectedId)) return;
+  const sel = listEl.querySelector(`.rowItem[data-id="${State.selectedId}"]`);
+  if (sel) sel.classList.add("selected");
+}
+
+function scrollSelectedIntoView() {
+  const listEl = $("#list");
+  if (!Number.isFinite(State.selectedId)) return;
+  const sel = listEl.querySelector(`.rowItem[data-id="${State.selectedId}"]`);
+  if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+
+function showUpdateSummary(newVer, oldVer, addedIds) {
+  const onlySkill = [];
+  const onlyAbility = [];
+  const both = [];
+
+  for (const id of addedIds) {
+    const e = State.entryById.get(id);
+    if (!e) continue;
+    const tag = entryTag(e);
+    if (tag === "skill") onlySkill.push(id);
+    else if (tag === "ability") onlyAbility.push(id);
+    else both.push(id);
+  }
+
+  const fmt = (arr) => arr.length ? (arr.slice(0, 120).join(", ") + (arr.length > 120 ? `\n…(共 ${arr.length} 个)` : "")) : "（无）";
+
+  $("#updateCard").style.display = "block";
+  $("#sumVer").textContent = `${oldVer || "未安装"} → ${newVer}`;
+  $("#sumPill").textContent = `新增 ${addedIds.length} 条`;
+
+  $("#sumOnlySkill").textContent = fmt(onlySkill);
+  $("#sumOnlyAbility").textContent = fmt(onlyAbility);
+  $("#sumBoth").textContent = fmt(both);
+
+  $("#updateCard").classList.remove("collapsed");
+}
+
+function selectEntryById(id, { scroll = false } = {}) {
+  id = Number(id);
+  const e = State.entryById.get(id) || null;
+  State.selectedId = id;
+  State.selectedEntry = e;
+
+  renderDetail();
+  syncSelectedRowHighlight();
+  if (scroll) scrollSelectedIntoView();
+}
+
+async function loadFromCacheAndInitUI() {
+  const ver = await getInstalledVersion();
+  State.version = ver;
+  $("#chipVer").innerHTML = `已安装：<strong>${ver || "未安装"}</strong>`;
+
+  if (!ver) {
+    setStatus("未检测到缓存：请点击“加载加密数据包 ZIP”。", "");
+    State.skillsRaw = State.abilitiesRaw = null;
+    State.skills = State.abilities = [];
+    State.entryById = new Map();
+    State.entries = [];
+    State.filtered = [];
+    State.selectedId = null;
+    State.selectedEntry = null;
+    renderListBatched({ keepScroll: false });
+    renderDetail();
+    $("#updateCard").style.display = "none";
+    return;
+  }
+
+  const sRes = await getFileJsonTextSmart("mDressSkills.json", ["dress", "skill"]);
+  const aRes = await getFileJsonTextSmart("mDressAbilities.json", ["dress", "abil"]);
+
+  if (!sRes.text || !aRes.text) {
+    const keys = aRes.keys || sRes.keys || [];
+    setStatus(
+      "缓存不完整：未找到 skills/abilities 文件。\n" +
+      `找到 skills: ${sRes.name || "❌"}\n` +
+      `找到 abilities: ${aRes.name || "❌"}\n\n` +
+      "当前 DB 中缓存的文件名：\n" +
+      keys.map(k => " - " + k).join("\n"),
+      "err"
+    );
+    return;
+  }
+
+  State.skillsRaw = safeParse(sRes.text, sRes.name || "skills.json");
+  State.abilitiesRaw = safeParse(aRes.text, aRes.name || "abilities.json");
+
+  State.skills = asArray(State.skillsRaw);
+  State.abilities = asArray(State.abilitiesRaw);
+
+  buildUnifiedEntries();
+  State.filtered = State.entries;
+
+  setStatus(
+    `已从 IndexedDB 加载 ✅\n版本：${ver}\n` +
+    `skills 行数：${State.skills.length}\nabilities 行数：${State.abilities.length}\n` +
+    `合集 entries：${State.entries.length}\n\n` +
+    `提示：列表标签 skill/ability/both 表示该 ID 在哪些表存在。`,
+    "ok"
+  );
+
+  renderListBatched({ keepScroll: false });
+
+  if (State.entries.length) {
+    State.selectedId = State.entries[0].id;
+    State.selectedEntry = State.entryById.get(State.selectedId);
+    renderDetail();
+    requestAnimationFrame(syncSelectedRowHighlight);
+  }
+
+  if (State.lastUpdate) {
+    const { newVer, oldVer, addedIds } = State.lastUpdate;
+    showUpdateSummary(newVer, oldVer, addedIds);
+  }
+}
+
+async function handleZipFile(file) {
+  const oldVer = await getInstalledVersion();
+  const oldAll = oldVer ? await snapshotOldAllIds() : new Set();
+
+  setStatus("正在读取 ZIP 并安装数据包…", "");
+  const buf = await file.arrayBuffer();
+  const newVer = await installFromZip(buf, file.name);
+
+  await loadFromCacheAndInitUI();
+
+  const newAll = new Set(State.entries.map(e => e.id));
+  const added = [];
+  for (const id of newAll) if (!oldAll.has(id)) added.push(id);
+  added.sort((a,b)=>a-b);
+
+  State.lastUpdate = { newVer, oldVer, addedIds: added };
+  showUpdateSummary(newVer, oldVer, added);
+
+  toast("导入成功");
+}
+
+$("#zipInput").addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    await handleZipFile(file);
+  } catch (err) {
+    console.error(err);
+    setStatus("导入失败 ❌\n" + err.message, "err");
+    toast("导入失败");
+  } finally {
+    e.target.value = "";
+  }
+});
+
+$("#btnClear").addEventListener("click", async () => {
+  try {
+    await dbDeleteDatabase();
+    State.lastUpdate = null;
+    toast("已清除数据");
+    await loadFromCacheAndInitUI();
+  } catch (err) {
+    setStatus("清除失败 ❌\n" + err.message, "err");
+  }
+});
+
+$("#btnReload").addEventListener("click", async () => {
+  try {
+    toast("重新加载");
+    await loadFromCacheAndInitUI();
+  } catch (err) {
+    setStatus("加载失败 ❌\n" + err.message, "err");
+  }
+});
+
+$("#q").addEventListener("input", () => {
+  applySearch($("#q").value);
+  renderListBatched({ keepScroll: false });
+
+  if (Number.isFinite(State.selectedId) && State.filtered.some(x => x.id === State.selectedId)) {
+    State.selectedEntry = State.entryById.get(State.selectedId) || null;
+    renderDetail();
+    requestAnimationFrame(syncSelectedRowHighlight);
+  } else if (State.filtered.length) {
+    selectEntryById(State.filtered[0].id, { scroll: false });
+  } else {
+    State.selectedId = null;
+    State.selectedEntry = null;
+    renderDetail();
+  }
+});
+
+function stepSelect(delta){
+  if (!State.filtered.length) return;
+  let idx = State.filtered.findIndex(x => x.id === State.selectedId);
+  if (idx < 0) idx = 0;
+  idx = Math.max(0, Math.min(State.filtered.length - 1, idx + delta));
+  selectEntryById(State.filtered[idx].id, { scroll: true });
+}
+
+$("#btnPrev").addEventListener("click", () => stepSelect(-1));
+$("#btnNext").addEventListener("click", () => stepSelect(1));
+
+$("#btnCopyId").addEventListener("click", async () => {
+  if (!State.selectedId) return toast("未选择");
+  await navigator.clipboard.writeText(String(State.selectedId));
+  toast("已复制 ID");
+});
+
+$("#btnCopySkill").addEventListener("click", async () => {
+  const e = State.selectedEntry;
+  if (!e || !e.skill) return toast("无 skill");
+  await navigator.clipboard.writeText(JSON.stringify(e.skill, null, 2));
+  toast("已复制 skill JSON");
+});
+
+$("#btnCopyAbility").addEventListener("click", async () => {
+  const e = State.selectedEntry;
+  if (!e || !e.ability) return toast("无 ability");
+  await navigator.clipboard.writeText(JSON.stringify(e.ability, null, 2));
+  toast("已复制 ability JSON");
+});
+
+$("#updateToggle").addEventListener("click", () => {
+  $("#updateCard").classList.toggle("collapsed");
+});
+
+$("#list").addEventListener("click", (e) => {
+  const row = e.target.closest(".rowItem");
+  if (!row) return;
+  const id = Number(row.getAttribute("data-id"));
+  selectEntryById(id, { scroll: true });
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+  if (e.key === "ArrowUp") { e.preventDefault(); stepSelect(-1); }
+  if (e.key === "ArrowDown") { e.preventDefault(); stepSelect(1); }
+  if (e.key === "/") { e.preventDefault(); $("#q").focus(); }
+});
+
+loadFromCacheAndInitUI();
+
+
+// ===== PWA 离线支持（GitHub Pages / HTTPS）=====
+(function setupPWA(){
+  const chip = document.querySelector("#chipPwa");
+  const btn = document.querySelector("#btnUpdate");
+  function refreshNet(){
+    if (!chip) return;
+    chip.textContent = "离线：" + (navigator.onLine ? "否" : "是");
+  }
+  window.addEventListener("online", refreshNet);
+  window.addEventListener("offline", refreshNet);
+  refreshNet();
+
+  if (!("serviceWorker" in navigator)) {
+    if (chip) chip.textContent = "离线：不支持";
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  let regRef = null;
+
+  async function register(){
+    try{
+      regRef = await navigator.serviceWorker.register("./service-worker.js", { scope: "./" });
+      // If there's an updated SW waiting, show hint
+      if (regRef.waiting) {
+        if (chip) chip.textContent = "离线：已缓存（有更新待应用）";
+      } else {
+        if (chip) chip.textContent = "离线：" + (navigator.onLine ? "已缓存" : "是（已缓存）");
+      }
+      // Listen for updates
+      regRef.addEventListener("updatefound", () => {
+        const sw = regRef.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", () => {
+          if (sw.state === "installed") {
+            // New content available
+            if (navigator.serviceWorker.controller) {
+              if (chip) chip.textContent = "离线：有更新待应用";
+              toast?.("检测到更新：点“检查更新”应用");
+            }
+          }
+        });
+      });
+    }catch(e){
+      console.warn("SW 注册失败", e);
+      if (chip) chip.textContent = "离线：注册失败";
+    }
+  }
+
+  async function applyUpdate(){
+    try{
+      if (!regRef) regRef = await navigator.serviceWorker.getRegistration("./");
+      if (!regRef) return toast?.("未找到离线缓存（请刷新一次）");
+      await regRef.update();
+      if (regRef.waiting) {
+        regRef.waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+      // Give SW a moment to activate, then reload
+      setTimeout(()=>location.reload(), 300);
+    }catch(e){
+      console.warn("更新失败", e);
+      toast?.("更新失败（见控制台）");
+    }
+  }
+
+  if (btn) btn.addEventListener("click", applyUpdate);
+
+  register();
+
+  // When controller changes, reload to apply new version
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // Avoid infinite reload loops
+    if (window.__reloading) return;
+    window.__reloading = true;
+    location.reload();
+  });
+})();
+// ==============================================
+
+</script>
+</body>
+</html>
